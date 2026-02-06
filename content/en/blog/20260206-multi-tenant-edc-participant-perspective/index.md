@@ -86,6 +86,12 @@ Under the hood, portal backends and automation typically interact with a small s
 | Observability APIs | All components | Readiness/health endpoints | varies |
 | Federated Catalog API (optional) | Control Plane | Query federated catalog | OAuth2 |
 
+What each runtime touchpoint means for tenants:
+
+- **Credential Service**: where issued credentials land and proofs get assembled. Tenants think about “do I have the credential, can I prove it?”—not key material and cryptographic formats.
+- **Control Plane**: where tenants publish offerings, define policies, and negotiate contracts. The platform handles DSP choreography behind the scenes. If policy needs evolve without redeploying the runtime, EDC-V supports [dynamic policy evaluation using CEL](https://github.com/eclipse-edc/Virtual-Connector/blob/main/docs/common_expression_language.md).
+- **Data Plane**: where data connects to systems—object stores, APIs, streams, OT gateways. Data flows only after authorization; the data plane can be optimized and deployed close to the data.
+
 ## Authentication and access control
 
 Humans authenticate to the portal. The portal backend and platform automation use **machine credentials** to call administration APIs on behalf of a participant context.
@@ -102,6 +108,22 @@ Two token claims are especially important for correctness:
 - `participant_context_id`: identifies the participant context the client acts for
 
 Treat `participant_context_id` as the security unit for both API access and operational troubleshooting.
+
+### Implementation details
+
+Participant-scoped endpoints are typically rooted under `/participants/{participant_context_id}/...`, which is how the platform enforces isolation at the API surface.
+
+It is recommended that the OAuth2 `client_id` is **not** the same value as the `participant_context_id`. Treat the participant context as the stable identifier and the client ID as a credential handle you can rotate independently.
+
+For participant-scoped tokens, keep a `scope` claim that limits what the client can do (e.g., `management-api:read`/`management-api:write`). Avoid wildcard scopes for tenant-facing clients.
+
+Typical token retrieval (client_credentials flow):
+
+```bash
+curl -X POST "$TOKEN_URL" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials&client_id=...&client_secret=..."
+```
 
 ## How data sharing works
 
@@ -161,6 +183,16 @@ A practical learning path:
 2. Study EDC-V’s architecture and security model: [EDC-V docs](https://github.com/eclipse-edc/Virtual-Connector/tree/main/docs)
 3. Read CFM’s architecture and extension points: [CFM system architecture](https://github.com/Metaform/connector-fabric-manager/blob/main/docs/developer/architecture/system.architecture.md)
 4. Sketch your own “cells + VPAs + trust boundary” diagram and validate it with SREs and architects
+
+## Key takeaway
+
+| Perspective | Core message |
+|---|---|
+| Operations | CFM automates provisioning and lifecycle, but it is not in the trust-decision path |
+| Participant | Tenants get a clear product surface; the platform absorbs connector complexity |
+| Data Sharing | Trust stays decentralized while operations stay centralized — ecosystems grow without linear overhead |
+
+If you take one thing away: **centralize operations, decentralize trust, and keep the protocol surface stable** — that's how managed dataspaces become repeatable, scalable, and credible in production.
 
 ## Series recap
 

@@ -67,11 +67,36 @@ Run EDC-V on standard cloud-native infrastructure and keep the foundation intent
 
 Treat identity, secrets, persistence, networking, and observability as first-class dependencies. Prefer managed offerings and proven primitives over bespoke infrastructure—especially for IAM/IDP integration, secret storage, database backups, and telemetry pipelines.
 
+| Component | Purpose |
+|---|---|
+| Kubernetes | Container orchestration and scaling |
+| PostgreSQL | State persistence across components |
+| Vault / STS | Secrets, key material, and token-related infrastructure |
+| DNS | Request routing and DID resolution |
+| Observability stack | Metrics, logging, and tracing |
+| IAM / IDP | Authentication for operators and participants |
+
 ## The Connector Fabric Manager (CFM)
 
 CFM is the **management plane**. It provisions participant contexts and automates the lifecycle of VPAs. You can think of it as an orchestration layer for service virtualization: it creates runtime, but it is not the runtime.
 
 For the full architectural model and extension points, see the upstream documentation: [CFM system architecture](https://github.com/Metaform/connector-fabric-manager/blob/main/docs/developer/architecture/system.architecture.md).
+
+CFM comprises three subsystems:
+
+| Subsystem | Role |
+|---|---|
+| Tenant Manager (TM) | Persists tenancy and virtualization metadata; exposes a REST API; initiates deployments |
+| Provision Manager (PM) | Executes stateful orchestrations (workflows) for onboarding and VPA lifecycle |
+| Activity Agents | Asynchronously process orchestration steps in isolated security contexts |
+
+The Tenant Manager is the metadata control point; the Provision Manager is the execution engine. Communication between them happens through NATS JetStream, which provides reliable, decoupled messaging that makes long-running orchestrations resilient to restarts.
+
+Activity Agents are where you integrate with your cloud platform. Typical responsibilities include:
+
+- Deploy runtime components to Kubernetes
+- Configure Vault namespaces
+- Set up DNS entries
 
 ### Architectural insight: provisioning is not runtime trust
 
@@ -91,6 +116,8 @@ EDC-V commonly provisions three VPA types:
 - **Credential Service VPA**: stores verifiable credentials and produces proofs. In the Eclipse ecosystem, the canonical wallet/credential implementation is Identity Hub; see [Identity Hub](/documentation/for-adopters/identity-hub/).
 - **Data Plane VPA**: executes data flows once authorized; optimized for throughput and proximity to data. See [Data Plane](/documentation/for-adopters/data-plane/).
 
+> **Context Isolation**: While VPAs share infrastructure, they are logically isolated. One participant context cannot see or access another participant's data, credentials, or configuration.
+
 In production, expect **multiple instances of each type** for capacity and separation (for example multiple data planes per participant for protocol or environment separation).
 
 ## The mental model shift
@@ -105,6 +132,8 @@ CFM-managed deployments invert that model: one runtime serves many participant c
 | Deploy infrastructure per tenant | Provision VPA metadata |
 | Scale by adding containers | Scale by adding cells |
 | Manage operations per-tenant | Manage operations centrally |
+
+This shift makes scaling sub-linear rather than linear with tenant count. You manage fewer cells with centralized tooling instead of hundreds of per-tenant deployments.
 
 ## What’s next
 
